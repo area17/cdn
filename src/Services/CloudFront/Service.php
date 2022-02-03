@@ -79,6 +79,8 @@ class Service extends BaseService implements CDNService
 
     protected function createInvalidationRequest(array $paths = []): bool
     {
+        $paths = array_filter($paths);
+
         if (count($paths) === 0) {
             return false;
         }
@@ -115,7 +117,11 @@ class Service extends BaseService implements CDNService
 
     public function getInvalidationPath($item)
     {
-        $url = $item instanceof Url ? $item->url : $item->url->url ?? null;
+        if (is_string($item)) {
+            return $item;
+        }
+
+        $url = $item instanceof Url ? $item->url : $item->url->url ?? $item;
 
         if (!is_string($url)) {
             return null;
@@ -123,6 +129,6 @@ class Service extends BaseService implements CDNService
 
         $url = parse_url($url);
 
-        return $url['path'] ?? '/';
+        return $url['path'] ?? '/*';
     }
 }
