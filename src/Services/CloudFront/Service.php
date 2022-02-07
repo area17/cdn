@@ -28,9 +28,9 @@ class Service extends BaseService implements CDNService
         $this->instantiate();
     }
 
-    public function invalidate(): bool
+    public function invalidate(): void
     {
-        return $this->mustInvalidateAll()
+        $this->mustInvalidateAll()
             ? $this->invalidateAll()
             : $this->invalidatePaths();
     }
@@ -41,16 +41,16 @@ class Service extends BaseService implements CDNService
             config('cdn.services.cloud_front.max_urls');
     }
 
-    public function invalidateAll(): bool
+    public function invalidateAll(): void
     {
-        return $this->createInvalidationRequest(
+        $this->createInvalidationRequest(
             config('cdn.services.cloud_front.invalidate_all_paths'),
         );
     }
 
-    public function invalidatePaths(): bool
+    public function invalidatePaths(): void
     {
-        return $this->createInvalidationRequest($this->paths);
+        $this->createInvalidationRequest($this->paths);
     }
 
     protected function getDistributionId(): ?string
