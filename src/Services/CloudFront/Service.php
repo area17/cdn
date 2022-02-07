@@ -19,19 +19,26 @@ class Service extends BaseService implements CDNService
 {
     protected CloudFrontClient $client;
 
+    protected $tags;
+
+    protected $paths;
+
     public function __construct()
     {
         $this->instantiate();
     }
 
-    public function invalidate(Collection $items): bool
+    public function invalidate(): bool
     {
-        $items = collect($items)
-            ->map(fn($item) => $this->getInvalidationPath($item))
-            ->unique()
-            ->toArray();
+        return $this->mustInvalidateAll()
+            ? $this->invalidateAll()
+            : $this->invalidatePaths();
+    }
 
-        return $this->createInvalidationRequest($items);
+    public function mustInvalidateAll()
+    {
+        return count($this->paths) >
+            config('cdn.services.cloud_front.max_urls');
     }
 
     public function invalidateAll(): bool
@@ -39,6 +46,11 @@ class Service extends BaseService implements CDNService
         return $this->createInvalidationRequest(
             config('cdn.services.cloud_front.invalidate_all_paths'),
         );
+    }
+
+    public function invalidatePaths(): bool
+    {
+        return $this->createInvalidationRequest($this->paths);
     }
 
     protected function getDistributionId(): ?string
@@ -101,7 +113,7 @@ class Service extends BaseService implements CDNService
                 'CDN: CloudFront invalidation request failed: ' .
                     $e->getMessage() .
                     ' - PATHS: ' .
-                    json_encode($paths)
+                    json_encode($paths),
             );
 
             return false;
@@ -130,5 +142,17 @@ class Service extends BaseService implements CDNService
         $url = parse_url($url);
 
         return $url['path'] ?? '/*';
+    }
+
+    public function setTags($tags)
+    {
+        $this->tags = $tags;
+
+        $this->paths = collect($tags)
+            ->map(fn($tag) => $this->getInvalidationPath($tag))
+            ->unique()
+            ->toArray();
+
+        return $this;
     }
 }

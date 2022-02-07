@@ -8,8 +8,10 @@ use A17\CDN\Models\Url;
 use A17\CDN\Jobs\StoreTags;
 use Illuminate\Support\Str;
 use A17\CDN\Jobs\InvalidateTags;
+use A17\CDN\Jobs\InvalidateModel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -33,11 +35,14 @@ class Tags
         }
     }
 
-    protected function deleteTags($tags): void
+    protected function deleteTags($tags = []): void
     {
         $tags = is_string($tags)
             ? [$tags]
-            : ($tags = $tags->pluck('tag')->toArray());
+            : ($tags = collect($tags)
+                ->pluck('tag')
+                ->unique()
+                ->toArray());
 
         Tag::whereIn('tag', $tags)->update([
             'obsolete' => false,
@@ -53,6 +58,17 @@ class Tags
             ->update([
                 'was_purged_at' => now(),
             ]);
+    }
+
+    protected function deleteAllTags($tags = []): void
+    {
+        Tag::whereNotNull('id')->update([
+            'obsolete' => true,
+        ]);
+
+        Url::whereNotNull('id')->update([
+            'was_purged_at' => now(),
+        ]);
     }
 
     /**
@@ -159,13 +175,7 @@ class Tags
 
     public function invalidateTagsFor(Model $model): void
     {
-        $tags = $this->getAllTagsForModel($this->makeTag($model))
-            ->pluck('tag')
-            ->toArray();
-
-        if (filled($tags)) {
-            InvalidateTags::dispatch($tags);
-        }
+        InvalidateModel::dispatch($model);
     }
 
     public function invalidateCacheTags($tags = null): void
@@ -185,17 +195,42 @@ class Tags
         $this->dispatchInvalidations(Tag::whereIn('tag', $tags)->get());
     }
 
+    public function invalidateModel($model): void
+    {
+        $tags = $this->getAllTagsForModel($this->makeTag($model))
+            ->pluck('tag')
+            ->unique();
+
+        if (blank($tags)) {
+            return;
+        }
+
+        Log::debug(
+            'CDN: invalidating tag for ' .
+                $this->makeTag($model) .
+                '. Found: ' .
+                count($tags ?? []) .
+                ' tags',
+        );
+
+        Log::debug($tags);
+
+        $this->dispatchInvalidations(Tag::whereIn('tag', $tags)->get());
+    }
+
     protected function invalidateObsoleteTags(): void
     {
         $count = Tag::where('obsolete', true)->count();
 
-        if ($count > config('cdn.invalidations.batch.max_tags')) {
+        $obsoleteTags = Tag::where('obsolete', true)->get('tag');
+
+        if (count($obsoleteTags) > config('cdn.invalidations.batch.max_tags')) {
             $this->invalidateEntireCache();
 
             return;
         }
 
-        $this->dispatchInvalidations(Tag::where('obsolete', true)->get());
+        $this->dispatchInvalidations($obsoleteTags);
     }
 
     protected function makeTagsObsolete(array $tags): void
@@ -205,17 +240,22 @@ class Tags
 
     protected function dispatchInvalidations(Collection $tags): void
     {
-        if (CDN::cdn()->invalidate($tags)) {
-            // TODO: what happens here on Akamai?
-            $this->deleteTags($tags);
-        }
+        CDN::cdn()->setTags($tags);
+
+        CDN::cdn()->invalidate();
+
+        CDN::cdn()->mustInvalidateAll()
+            ? $this->deleteAllTags()
+            : $this->deleteTags($tags);
     }
 
     protected function invalidateEntireCache()
     {
-        CDN::cdn()->invalidate(
-            collect(config('cdn.invalidations.batch.site_roots')),
-        );
+        CDN::cdn()->setTags(config('cdn.invalidations.batch.site_roots'));
+
+        CDN::cdn()->invalidate();
+
+        $this->deleteAllTags();
     }
 
     /*

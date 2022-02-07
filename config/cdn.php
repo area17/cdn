@@ -253,6 +253,8 @@ return [
             ),
 
             'invalidate_all_paths' => ['/*'],
+
+            'max_urls' => 3000, // CloudFront has this limit
         ],
     ],
 
