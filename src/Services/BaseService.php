@@ -17,7 +17,7 @@ abstract class BaseService implements ServiceContract
         string $value
     ): Response {
         collect(config("cdn.headers.$service"))->each(
-            fn(string $header) => $response->header(
+            fn(string $header) => $response->headers->set(
                 $header,
                 collect($value)->join(', '),
             ),

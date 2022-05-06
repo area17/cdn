@@ -99,7 +99,7 @@ class CacheControl extends BaseService implements ServiceContract
             $this->_content = $this->minifyContent($response->content());
         }
 
-        return $this->_content;
+        return $this->_content ?? '';
     }
 
     public function getMaxAge(): int
