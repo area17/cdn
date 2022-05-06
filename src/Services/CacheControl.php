@@ -94,7 +94,8 @@ class CacheControl extends BaseService implements ServiceContract
         if (
             !filled($this->_content) &&
             filled($response) &&
-            !($response instanceof BinaryFileResponse)
+            !($response instanceof BinaryFileResponse) &&
+            method_exists($response, 'content')
         ) {
             $this->_content = $this->minifyContent($response->content());
         }
