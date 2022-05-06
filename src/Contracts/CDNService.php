@@ -7,7 +7,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 interface CDNService
 {
-    public function invalidate(): bool;
+    public function invalidate(): void;
 
-    public function invalidateAll(): bool;
+    public function invalidateAll(): void;
 }
